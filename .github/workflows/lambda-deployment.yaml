@@ -110,3 +110,15 @@ jobs:
             else
               aws lambda create-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} --function-version $NEW_VERSION
             fi    
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "v${{ steps.deploy_lambda.outputs.VERSION }}"  # Replace dynamically if needed
+          release_name: "Release v${{ steps.deploy_lambda.outputs.VERSION }}"
+          body: "This is an automated release."
+          draft: false
+          prerelease: false
