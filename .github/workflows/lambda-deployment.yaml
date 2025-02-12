@@ -92,11 +92,9 @@ jobs:
           terraform workspace select ${{ inputs.environment }} || terraform workspace new ${{ inputs.environment }} &&
           terraform apply "${{ inputs.environment }}.plan"
 
-      - name: Deploy new Lambda version
+      - name: Publish new Lambda version
         id: deploy_lambda
-        run: |
-          aws lambda update-function-code --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --zip-file fileb://function.zip
-              
+        run: |      
           # Publish new version
           VERSION=$(aws lambda publish-version --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --query 'Version' --output text)
           echo "New Lambda Version: $VERSION"
