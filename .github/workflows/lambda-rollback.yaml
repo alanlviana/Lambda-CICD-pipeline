@@ -15,6 +15,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Comment on Issue
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: "⌛ Lambda rollback in progress!."
+
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -67,7 +74,7 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.issue.number }}
-          body: "✅ Lambda rollback successful! The alias **${{ steps.extract.outputs.ENVIRONMENT }}** now points to version **${{ steps.extract.outputs.VERSION }}**."
+          body: "✅ Lambda rollback successful! The alias **${{ steps.config.outputs.FUNCTION_ALIAS }}** now points to version **${{ steps.extract.outputs.VERSION }}**."
 
       - name: Close Issue
         run: gh issue close ${{ github.event.issue.number }}
