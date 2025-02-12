@@ -1,0 +1,113 @@
+name: "Lambda Deployment"
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install YQ
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yq
+          
+      - name: Load configuration
+        id: config
+        run: |
+          FUNCTION_NAME=$(yq eval '.environments.${{ inputs.environment }}.function-name' config-pipeline.yaml)
+          FUNCTION_ALIAS=$(yq eval '.environments.${{ inputs.environment }}.alias-name' config-pipeline.yaml)
+          AWS_ASSUME_ROLE=$(yq eval '.environments.${{ inputs.environment }}.aws-assume-role-arn' config-pipeline.yaml)
+          AWS_REGION=$(yq eval '.environments.${{ inputs.environment }}.aws-region' config-pipeline.yaml)
+          STATEFILE_BUCKET=$(yq eval '.environments.${{ inputs.environment }}.aws-statefile-s3-bucket' config-pipeline.yaml)
+          STATEFILE_DYNAMODB=$(yq eval '.environments.${{ inputs.environment }}.aws-statefile-dynamodb-table' config-pipeline.yaml)
+          TERRAFORM_VERSION=$(yq eval '.terraform.version' config-pipeline.yaml)
+          TERRAFORM_DESTROY=$(yq eval '.terraform.destroy' config-pipeline.yaml)
+
+          echo "FUNCTION_NAME=$(echo $FUNCTION_NAME)" >> $GITHUB_OUTPUT
+          echo "FUNCTION_ALIAS=$(echo $FUNCTION_ALIAS)" >> $GITHUB_OUTPUT
+          echo "AWS_ASSUME_ROLE=$(echo $AWS_ASSUME_ROLE)" >> $GITHUB_OUTPUT
+          echo "AWS_REGION=$(echo $AWS_REGION)" >> $GITHUB_OUTPUT
+          echo "STATEFILE_BUCKET=$(echo $STATEFILE_BUCKET)" >> $GITHUB_OUTPUT
+          echo "STATEFILE_DYNAMODB=$(echo $STATEFILE_DYNAMODB)" >> $GITHUB_OUTPUT
+          echo "TERRAFORM_VERSION=$(echo $TERRAFORM_VERSION)" >> $GITHUB_OUTPUT
+          echo "TERRAFORM_DESTROY=$(echo $TERRAFORM_DESTROY)" >> $GITHUB_OUTPUT
+
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.config.outputs.TERRAFORM_VERSION }}
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.AWS_ASSUME_ROLE }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ steps.config.outputs.AWS_REGION }}
+
+      - name: Terraform Init
+        run: |
+          cd infra && terraform init \
+            -backend-config="bucket=${{ steps.config.outputs.STATEFILE_BUCKET }}" \
+            -backend-config="key=${{ github.event.repository.name }}" \
+            -backend-config="region=${{ steps.config.outputs.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ steps.config.outputs.STATEFILE_DYNAMODB }}"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Destroy
+        if: steps.config.outputs.TERRAFORM_DESTROY == 'true'
+        id: terraform-destroy
+        run: cd infra &&
+          terraform workspace select ${{ inputs.environment }} || terraform workspace new ${{ inputs.environment }} &&
+          terraform destroy -var-file="./environments/${{ inputs.environment }}/terraform.tfvars" -auto-approve
+
+      - name: Terraform Plan
+        if: steps.config.outputs.TERRAFORM_DESTROY != 'true'
+        id: terraform-plan
+        run: cd infra &&
+          terraform workspace select ${{ inputs.environment }} || terraform workspace new ${{ inputs.environment }} &&
+          terraform plan -var-file="./environments/${{ inputs.environment }}/terraform.tfvars" -out="${{ inputs.environment }}.plan"
+
+      - name: Terraform Apply
+        if: steps.config.outputs.TERRAFORM_DESTROY != 'true'
+        id: terraform-apply
+        run: cd infra &&
+          terraform workspace select ${{ inputs.environment }} || terraform workspace new ${{ inputs.environment }} &&
+          terraform apply "${{ inputs.environment }}.plan"
+
+      - name: Package Lambda function
+        run: |
+          zip -r function.zip src
+
+      - name: Deploy new Lambda version
+        id: deploy_lambda
+        run: |
+          aws lambda update-function-code --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --zip-file fileb://function.zip
+              
+          # Publish new version
+          VERSION=$(aws lambda publish-version --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --query 'Version' --output text)
+          echo "New Lambda Version: $VERSION"
+          echo "VERSION=$(echo $VERSION)" >> $GITHUB_OUTPUT
+
+
+      - name: Create or Update Alias
+        run: |
+            NEW_VERSION=${{ steps.deploy_lambda.outputs.VERSION }}
+
+            if aws lambda get-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} 2>/dev/null; then
+              aws lambda create-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} --function-version $NEW_VERSION
+            else
+              aws lambda update-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} --function-version $NEW_VERSION
+            fi    

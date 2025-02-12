@@ -1,0 +1,16 @@
+name: "01 - DEVELOP DEPLOY"
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lambda-deployment:
+    uses: ./.github/workflows/lambda-deployment.yml
+    with:
+      environment: dev
