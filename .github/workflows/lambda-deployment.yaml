@@ -97,6 +97,7 @@ jobs:
           terraform apply "${{ inputs.environment }}.plan"
 
       - name: Publish new Lambda version
+        if: steps.config.outputs.TERRAFORM_DESTROY != 'true'
         id: deploy_lambda
         run: |      
           # Publish new version
@@ -106,6 +107,7 @@ jobs:
 
 
       - name: Create or Update Alias
+        if: steps.config.outputs.TERRAFORM_DESTROY != 'true'
         run: |
             NEW_VERSION=${{ steps.deploy_lambda.outputs.VERSION }}
 
@@ -117,7 +119,7 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
-        if: ${{inputs.create_release}}
+        if: ${{inputs.create_release}} && steps.config.outputs.TERRAFORM_DESTROY != 'true'
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
