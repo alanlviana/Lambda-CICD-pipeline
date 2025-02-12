@@ -11,6 +11,6 @@ permissions:
 
 jobs:
   lambda-deployment:
-    uses: ./.github/workflows/lambda-deployment.yml
+    uses: ./.github/workflows/lambda-deployment.yaml
     with:
       environment: dev
