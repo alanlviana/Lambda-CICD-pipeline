@@ -106,7 +106,7 @@ jobs:
             NEW_VERSION=${{ steps.deploy_lambda.outputs.VERSION }}
 
             if aws lambda get-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} 2>/dev/null; then
-              aws lambda create-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} --function-version $NEW_VERSION
-            else
               aws lambda update-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} --function-version $NEW_VERSION
+            else
+              aws lambda create-alias --function-name ${{ steps.config.outputs.FUNCTION_NAME }} --name ${{ steps.config.outputs.FUNCTION_ALIAS }} --function-version $NEW_VERSION
             fi    
