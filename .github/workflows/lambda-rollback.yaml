@@ -17,8 +17,8 @@ jobs:
         id: extract
         run: |
           ISSUE_BODY="${{ github.event.issue.body }}"
-          ENVIRONMENT=$(echo "$ISSUE_BODY" | grep -i 'environment:' | awk '{print $2}')
-          VERSION=$(echo "$ISSUE_BODY" | grep -i 'Enter the Lambda version number' | awk '{print $NF}')
+          ENVIRONMENT=$(echo "$ISSUE_BODY" | awk 'NR==3')
+          VERSION=$(echo "$ISSUE_BODY" | awk 'NR==7')
           
           echo "Environment: $ENVIRONMENT"
           echo "Version: $VERSION"
