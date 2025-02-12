@@ -22,5 +22,6 @@ resource "aws_lambda_function" "lambda_cicd_example" {
   handler       = var.lambda_handler
   role          = aws_iam_role.execution_role.arn
   filename = "../function.zip"
+  source_code_hash = filebase64sha256("../function.zip")
   runtime = var.runtime
 }

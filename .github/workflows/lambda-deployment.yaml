@@ -56,7 +56,9 @@ jobs:
 
       - name: Package Lambda function
         run: |
-          zip -r function.zip src
+          cd src
+          zip -r ../function.zip .
+          cd ..
 
       - name: Terraform Init
         run: |
