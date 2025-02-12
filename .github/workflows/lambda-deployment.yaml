@@ -6,6 +6,10 @@ on:
       environment:
         type: string
         required: true
+      create_release:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   terraform:
@@ -113,6 +117,7 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
+        if: ${{inputs.create_release}}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
