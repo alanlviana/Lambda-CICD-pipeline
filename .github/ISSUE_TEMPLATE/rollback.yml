@@ -1,0 +1,23 @@
+name: Rollback Lambda Version
+description: Request a rollback for a specific Lambda version.
+title: "[Rollback] Set Lambda alias to version X"
+labels: [ "rollback" ]
+body:
+- type: dropdown
+  id: environment
+  attributes:
+    label: "Select the environment"
+    options:
+    - dev
+    - prod
+  validations:
+    required: true
+
+- type: input
+  id: version
+  attributes:
+    label: "Enter the Lambda version number"
+    description: "Specify the Lambda version to roll back to"
+    placeholder: "e.g., 5"
+  validations:
+    required: true

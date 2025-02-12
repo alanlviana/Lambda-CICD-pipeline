@@ -1,0 +1,67 @@
+name: Rollback AWS Lambda Version
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  rollback_lambda:
+    if: contains(github.event.issue.labels.*.name, 'rollback') # Only run if issue has "rollback" label
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract Issue Data
+        id: extract
+        run: |
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          ENVIRONMENT=$(echo "$ISSUE_BODY" | grep -i 'environment:' | awk '{print $2}')
+          VERSION=$(echo "$ISSUE_BODY" | grep -i 'Enter the Lambda version number' | awk '{print $NF}')
+          
+          echo "Environment: $ENVIRONMENT"
+          echo "Version: $VERSION"
+
+          echo "ENVIRONMENT=$(echo $ENVIRONMENT)" >> $GITHUB_OUTPUT
+          echo "VERSION=$(echo $VERSION)" >> $GITHUB_OUTPUT
+
+      - name: Load configuration
+        id: config
+        run: |
+          FUNCTION_NAME=$(yq eval '.environments.${{ steps.extract.outputs.ENVIRONMENT }}.function-name' config-pipeline.yaml)
+          FUNCTION_ALIAS=$(yq eval '.environments.${{ steps.extract.outputs.ENVIRONMENT }}.alias-name' config-pipeline.yaml)
+          AWS_ASSUME_ROLE=$(yq eval '.environments.${{ steps.extract.outputs.ENVIRONMENT }}.aws-assume-role-arn' config-pipeline.yaml)
+          AWS_REGION=$(yq eval '.environments.${{ steps.extract.outputs.ENVIRONMENT }}.aws-region' config-pipeline.yaml)
+          
+          echo "FUNCTION_NAME=$(echo $FUNCTION_NAME)" >> $GITHUB_OUTPUT
+          echo "FUNCTION_ALIAS=$(echo $FUNCTION_ALIAS)" >> $GITHUB_OUTPUT
+          echo "AWS_ASSUME_ROLE=$(echo $AWS_ASSUME_ROLE)" >> $GITHUB_OUTPUT
+          echo "AWS_REGION=$(echo $AWS_REGION)" >> $GITHUB_OUTPUT
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.AWS_ASSUME_ROLE }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ steps.config.outputs.AWS_REGION }}
+  
+
+
+      - name: Rollback Lambda Alias
+        run: |
+
+          echo "Rolling back ${{ steps.config.outputs.FUNCTION_ALIAS }} alias to version $VERSION..."
+          
+          aws lambda update-alias \
+            --function-name ${{ steps.config.outputs.FUNCTION_NAME }} \
+            --name ${{ steps.config.outputs.FUNCTION_ALIAS }} \
+            --function-version ${{ steps.extract.outputs.VERSION }}
+
+      - name: Comment on Issue
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: "✅ Lambda rollback successful! The alias **${{ steps.extract.outputs.ENVIRONMENT }}** now points to version **${{ steps.extract.outputs.VERSION }}**."
+
+      - name: Close Issue
+        run: gh issue close ${{ github.event.issue.number }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
