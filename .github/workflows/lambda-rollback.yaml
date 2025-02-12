@@ -4,6 +4,9 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  id-token: write
+
 jobs:
   rollback_lambda:
     if: contains(github.event.issue.labels.*.name, 'rollback') # Only run if issue has "rollback" label
